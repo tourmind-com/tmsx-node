@@ -1,0 +1,28 @@
+name: release
+
+# On merge to main, bump the SDK version (default from the consumed spec's
+# release-bump.txt) and publish to npm with provenance. Set the NPM_TOKEN secret
+# (an automation/granular-access token with publish rights for @tourmind-com).
+on:
+  push:
+    branches: [main]
+    paths: ['src/**', 'spec/**', 'package.json']
+  workflow_dispatch:
+
+jobs:
+  publish-npm:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+      id-token: write     # npm provenance (OIDC)
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with: { node-version: '20', registry-url: 'https://registry.npmjs.org' }
+      - run: npm ci
+      - run: npm run build
+      - name: Bump version (default from spec release-bump.txt)
+        run: npm version "$(cat spec/release-bump.txt 2>/dev/null || echo patch)" --no-git-tag-version
+      - run: npm publish --access public --provenance
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
