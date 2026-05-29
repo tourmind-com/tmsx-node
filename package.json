@@ -1,0 +1,48 @@
+{
+  "name": "@tourmind-com/tmsx",
+  "version": "0.1.0",
+  "description": "TypeScript SDK for the Tourmind TMSX hotel API.",
+  "license": "SEE LICENSE IN LICENSE",
+  "author": "Tourmind <developer@tourmind.cn>",
+  "homepage": "https://developers.tourmind.cn",
+  "repository": { "type": "git", "url": "git+https://github.com/tourmind-com/tmsx-node.git" },
+  "bugs": { "url": "https://github.com/tourmind-com/tmsx-node/issues" },
+  "keywords": ["tourmind", "tmsx", "hotel", "travel", "api", "sdk"],
+  "type": "module",
+  "main": "./dist/index.cjs",
+  "module": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js",
+      "require": "./dist/index.cjs"
+    },
+    "./hotel": {
+      "types": "./dist/hotel/index.d.ts",
+      "import": "./dist/hotel/index.js",
+      "require": "./dist/hotel/index.cjs"
+    }
+  },
+  "files": ["dist", "README.md"],
+  "engines": { "node": ">=18" },
+  "scripts": {
+    "generate-types": "openapi-typescript https://raw.githubusercontent.com/tourmind-com/tmsx-platform/main/spec/tmsx-hotel-spec.yaml -o src/_generated/schema.ts",
+    "build": "tsup",
+    "typecheck": "tsc --noEmit",
+    "test": "vitest run",
+    "test:e2e": "vitest run --config vitest.e2e.config.ts",
+    "example": "tsx examples/canonical-flow.ts"
+  },
+  "dependencies": {
+    "openapi-fetch": "^0.10.0"
+  },
+  "devDependencies": {
+    "@types/node": "^20.0.0",
+    "openapi-typescript": "^7.0.0",
+    "tsup": "^8.0.0",
+    "tsx": "^4.0.0",
+    "typescript": "^5.5.0",
+    "vitest": "^2.0.0"
+  }
+}
