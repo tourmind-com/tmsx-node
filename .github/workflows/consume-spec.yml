@@ -1,0 +1,104 @@
+name: consume-spec
+
+# Pull a new spec release from tmsx-platform, regenerate types, test/build, and
+# open a PR. Triggered by the platform's repository_dispatch, an hourly cron
+# safety net, or manually.
+on:
+  repository_dispatch:
+    types: [spec-released]
+  schedule:
+    - cron: '23 * * * *'   # hourly safety net
+  workflow_dispatch:
+    inputs:
+      spec_version:
+        description: 'Spec version to consume (e.g. 2.0.5); blank = latest release'
+        required: false
+
+jobs:
+  regenerate:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+      pull-requests: write
+    env:
+      SPEC_REPO: tourmind-com/tmsx-platform
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with: { node-version: '20', cache: 'npm' }
+      - run: npm ci
+
+      - name: Determine target spec version
+        id: target
+        env:
+          GH_TOKEN: ${{ secrets.PLATFORM_READ_TOKEN }}
+        run: |
+          if [ -n "${{ github.event.inputs.spec_version }}" ]; then
+            v="${{ github.event.inputs.spec_version }}"
+          elif [ -n "${{ github.event.client_payload.spec_version }}" ]; then
+            v="${{ github.event.client_payload.spec_version }}"
+          else
+            v=$(gh release view -R "$SPEC_REPO" --json tagName -q '.tagName' | sed 's/^spec-v//')
+          fi
+          echo "version=$v" >> "$GITHUB_OUTPUT"
+          echo "target spec version: $v"
+
+      - name: Skip if already consumed
+        id: guard
+        run: |
+          current=$(cat .spec-version 2>/dev/null || echo "0.0.0")
+          if [ "$current" = "${{ steps.target.outputs.version }}" ]; then
+            echo "already on spec ${{ steps.target.outputs.version }} — nothing to do"
+            echo "skip=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "skip=false" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Download spec + test cases + bump
+        if: steps.guard.outputs.skip != 'true'
+        env:
+          GH_TOKEN: ${{ secrets.PLATFORM_READ_TOKEN }}
+        run: |
+          tag="spec-v${{ steps.target.outputs.version }}"
+          mkdir -p spec
+          gh release download "$tag" -R "$SPEC_REPO" \
+            -p 'tmsx-hotel-spec.yaml' -p 'tmsx-hotel-cases.yaml' -p 'release-bump.txt' \
+            -D spec/ --clobber
+
+      - name: Regenerate
+        if: steps.guard.outputs.skip != 'true'
+        run: make regenerate SPEC_VERSION=${{ steps.target.outputs.version }}
+
+      - name: Test
+        if: steps.guard.outputs.skip != 'true'
+        run: make test
+
+      - name: Integration harness (sandbox) — only if creds configured
+        if: steps.guard.outputs.skip != 'true'
+        env:
+          TMSX_AGENT_CODE: ${{ secrets.TMSX_SANDBOX_AGENT_CODE }}
+          TMSX_USERNAME:   ${{ secrets.TMSX_SANDBOX_USERNAME }}
+          TMSX_PASSWORD:   ${{ secrets.TMSX_SANDBOX_PASSWORD }}
+        run: |
+          if [ -z "$TMSX_AGENT_CODE" ]; then
+            echo "TMSX_SANDBOX_* secrets not configured — skipping sandbox integration test"
+            exit 0
+          fi
+          make integration-test
+
+      - name: Open PR
+        if: steps.guard.outputs.skip != 'true'
+        uses: peter-evans/create-pull-request@v6
+        with:
+          title: 'chore(spec): bump to v${{ steps.target.outputs.version }}'
+          branch: bot/spec-v${{ steps.target.outputs.version }}
+          commit-message: 'chore(spec): bump to v${{ steps.target.outputs.version }}'
+          body: |
+            Auto-generated PR — pulled spec `v${{ steps.target.outputs.version }}` from
+            [`tourmind-com/tmsx-platform`](https://github.com/tourmind-com/tmsx-platform/releases/tag/spec-v${{ steps.target.outputs.version }}).
+
+            CI regenerated types and ran typecheck + build (+ integration harness if sandbox creds are set).
+          add-paths: |
+            spec/
+            src/
+            .spec-version

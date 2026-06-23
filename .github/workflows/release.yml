@@ -1,0 +1,50 @@
+name: release
+
+# On merge to main, publish the SDK to npm with provenance. Set the NPM_TOKEN
+# secret (an automation/granular-access token with publish rights for @tourmind-com).
+#
+# Versioning is TAG-DRIVEN (same model as tmsx-go): the next version is computed
+# from the latest `v*` git tag + the consumed spec's release-bump.txt, then a tag
+# is pushed after publish. The version in package.json is set at build time only
+# and is intentionally NOT committed back — git tags are the source of truth, so
+# repeated releases never collide on a stale manifest version.
+on:
+  push:
+    branches: [main]
+    paths: ['src/**', 'spec/**', 'package.json']
+  workflow_dispatch:
+
+jobs:
+  publish-npm:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write    # push the version tag
+      id-token: write    # npm provenance (OIDC)
+    steps:
+      - uses: actions/checkout@v4
+        with: { fetch-depth: 0 }   # full history + tags for the version diff
+      - uses: actions/setup-node@v4
+        with: { node-version: '20', registry-url: 'https://registry.npmjs.org' }
+      - run: npm ci
+      - run: npm run build
+
+      - name: Compute next version from git tags
+        id: ver
+        run: |
+          bump="$(cat spec/release-bump.txt 2>/dev/null || echo patch)"
+          current="$(git describe --tags --abbrev=0 2>/dev/null || echo v0.0.0)"
+          new="$(npx --yes semver -i "$bump" "$current")"
+          echo "bumping $current -> v$new ($bump)"
+          echo "version=$new" >> "$GITHUB_OUTPUT"
+
+      - name: Set package version (build-time only, not committed)
+        run: npm version "${{ steps.ver.outputs.version }}" --no-git-tag-version --allow-same-version
+
+      - run: npm publish --access public --provenance
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+
+      - name: Tag the release
+        run: |
+          git tag "v${{ steps.ver.outputs.version }}" -m "release v${{ steps.ver.outputs.version }}"
+          git push origin "v${{ steps.ver.outputs.version }}"

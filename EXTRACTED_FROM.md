@@ -2,7 +2,7 @@
 
 This repo was populated by `bootstrap-repos.mjs` from the `tms-doc` repo.
 
-- **Source commit**: `b6c232cc3137e64f1f4e40fab2dab0a1a5de3465`
+- **Source commit**: `7a90ef0c812d0b26dfd416437800905e11bddc17`
 - **Extracted on**: 2026-05-29
 - **Target repo**: `tourmind-com/tmsx-node`
 
