@@ -6,8 +6,12 @@ name: consume-spec
 on:
   repository_dispatch:
     types: [spec-released]
-  schedule:
-    - cron: '23 * * * *'   # hourly safety net
+  # Hourly cron disabled until tmsx-platform publishes its first spec-v* release
+  # and PLATFORM_READ_TOKEN is configured (TECH-1117). Until then every scheduled
+  # run fails at "Determine target spec version" (gh auth error, exit 4). Re-enable
+  # once the platform release + read token exist. Manual + dispatch triggers remain.
+  # schedule:
+  #   - cron: '23 * * * *'   # hourly safety net
   workflow_dispatch:
     inputs:
       spec_version:
@@ -23,8 +27,8 @@ jobs:
     env:
       SPEC_REPO: tourmind-com/tmsx-platform
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
+      - uses: actions/checkout@v5
+      - uses: actions/setup-node@v5
         with: { node-version: '20', cache: 'npm' }
       - run: npm ci
 
